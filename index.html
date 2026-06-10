@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sales Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<style>
+body {
+  font-family: Arial;
+  margin: 0;
+  background: #f4f4f4;
+}
+
+header {
+  background: #222;
+  color: white;
+  padding: 15px;
+  text-align: center;
+}
+
+.container {
+  padding: 15px;
+}
+
+.card {
+  background: white;
+  padding: 15px;
+  margin-bottom: 15px;
+  border-radius: 10px;
+}
+
+select, input {
+  width: 100%;
+  padding: 10px;
+  margin-top: 5px;
+  margin-bottom: 10px;
+}
+
+button {
+  padding: 10px;
+  width: 100%;
+  background: green;
+  color: white;
+  border: none;
+  border-radius: 5px;
+}
+
+button:hover {
+  background: darkgreen;
+}
+
+.addons label {
+  display: block;
+  margin: 5px 0;
+}
+
+.item {
+  border-bottom: 1px solid #ddd;
+  padding: 5px 0;
+}
+
+.total {
+  font-size: 20px;
+  font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<h2>Sales Tracker</h2>
+</header>
+
+<div class="container">
+
+<!-- DASHBOARD -->
+<div class="card">
+<h3>Dashboard</h3>
+<p id="todaySales">Today Sales: ₱0</p>
+<p id="totalTransactions">Transactions: 0</p>
+</div>
+
+<!-- NEW ORDER -->
+<div class="card">
+<h3>New Sale</h3>
+
+<label>Product</label>
+<select id="product"></select>
+
+<label>Quantity</label>
+<input type="number" id="qty" value="1" min="1">
+
+<h4>Add-ons</h4>
+<div class="addons" id="addons"></div>
+
+<button onclick="addToCart()">Add to Cart</button>
+</div>
+
+<!-- CART -->
+<div class="card">
+<h3>Cart</h3>
+<div id="cart"></div>
+<p class="total" id="total">Total: ₱0</p>
+
+<button onclick="completeSale()">Complete Sale</button>
+</div>
+
+<!-- HISTORY -->
+<div class="card">
+<h3>Sales History</h3>
+<div id="history"></div>
+</div>
+
+</div>
+
+<script>
+// PRODUCTS
+const products = {
+  "Regular": 70,
+  "Special": 100,
+  "Spicy Special": 110,
+  "Cheesy Special": 115,
+  "Cheesy Spicy Special": 125,
+  "All Meat": 130,
+  "Spicy Meaty": 140,
+  "Cheesy Meaty": 145,
+  "Spicy Cheesy Meaty": 155,
+  "Super Special": 160,
+  "Overload": 175
+};
+
+const addons = {
+  "Extra Meat": 30,
+  "Extra Papaya": 30,
+  "Extra Cheese": 15,
+  "Extra Spicy": 10,
+  "Extra Egg": 15
+};
+
+let cart = [];
+let sales = JSON.parse(localStorage.getItem("sales")) || [];
+
+// INIT
+function init() {
+  let productSelect = document.getElementById("product");
+  for (let p in products) {
+    productSelect.innerHTML += `<option value="${p}">${p} - ₱${products[p]}</option>`;
+  }
+
+  let addonDiv = document.getElementById("addons");
+  for (let a in addons) {
+    addonDiv.innerHTML += `
+      <label>
+        ${a} (₱${addons[a]})
+        <input type="number" id="addon_${a}" value="0" min="0">
+      </label>
+    `;
+  }
+
+  renderHistory();
+  updateDashboard();
+}
+
+// ADD TO CART
+function addToCart() {
+  let product = document.getElementById("product").value;
+  let qty = parseInt(document.getElementById("qty").value);
+
+  let addonList = [];
+
+  for (let a in addons) {
+    let val = parseInt(document.getElementById("addon_" + a).value);
+    if (val > 0) {
+      addonList.push({
+        name: a,
+        qty: val,
+        price: addons[a]
+      });
+    }
+  }
+
+  cart.push({
+    product,
+    qty,
+    price: products[product],
+    addons: addonList
+  });
+
+  renderCart();
+}
+
+// RENDER CART
+function renderCart() {
+  let cartDiv = document.getElementById("cart");
+  cartDiv.innerHTML = "";
+  let total = 0;
+
+  cart.forEach((item, index) => {
+    let itemTotal = item.qty * item.price;
+
+    let addonText = "";
+    item.addons.forEach(a => {
+      itemTotal += a.qty * a.price;
+      addonText += `<div>+ ${a.name} x${a.qty}</div>`;
+    });
+
+    total += itemTotal;
+
+    cartDiv.innerHTML += `
+      <div class="item">
+        <b>${item.product} x${item.qty}</b><br>
+        ${addonText}
+        <b>₱${itemTotal}</b>
+      </div>
+    `;
+  });
+
+  document.getElementById("total").innerText = "Total: ₱" + total;
+}
+
+// COMPLETE SALE
+function completeSale() {
+  if (cart.length === 0) return alert("Cart is empty");
+
+  let total = 0;
+
+  cart.forEach(item => {
+    let itemTotal = item.qty * item.price;
+    item.addons.forEach(a => {
+      itemTotal += a.qty * a.price;
+    });
+    total += itemTotal;
+  });
+
+  let sale = {
+    date: new Date().toLocaleString(),
+    items: cart,
+    total
+  };
+
+  sales.push(sale);
+  localStorage.setItem("sales", JSON.stringify(sales));
+
+  cart = [];
+  renderCart();
+  renderHistory();
+  updateDashboard();
+}
+
+// HISTORY
+function renderHistory() {
+  let historyDiv = document.getElementById("history");
+  historyDiv.innerHTML = "";
+
+  sales.slice().reverse().forEach(s => {
+    historyDiv.innerHTML += `
+      <div class="item">
+        ${s.date}<br>
+        <b>₱${s.total}</b>
+      </div>
+    `;
+  });
+}
+
+// DASHBOARD
+function updateDashboard() {
+  let today = new Date().toDateString();
+
+  let todaySales = 0;
+  let count = 0;
+
+  sales.forEach(s => {
+    if (new Date(s.date).toDateString() === today) {
+      todaySales += s.total;
+      count++;
+    }
+  });
+
+  document.getElementById("todaySales").innerText = "Today Sales: ₱" + todaySales;
+  document.getElementById("totalTransactions").innerText = "Transactions: " + count;
+}
+
+init();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
+</body>
+</html>
