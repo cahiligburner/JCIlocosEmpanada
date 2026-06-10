@@ -382,13 +382,17 @@ function removeItem(index) {
 // CLEAR INPUTS
 
 function clearInputs() {
+  // Reset product to NONE
+  document.getElementById("product").value = "NONE";
+
+  // Reset quantity
   document.getElementById("qty").value = 1;
-for (let a in addons) {
-  document.getElementById("addon_qty_" + a).innerText = 0;
-}
+
+  // Reset add-ons (one-tap mode)
   for (let a in addons) {
-    document.getElementById("addon_" + a).value = 0;
+    document.getElementById("addon_qty_" + a).innerText = 0;
   }
+document.getElementById("product").focus();
 }
 // RENDER CART
 function renderCart() {
