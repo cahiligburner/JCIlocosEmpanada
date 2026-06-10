@@ -303,10 +303,11 @@ let sales = JSON.parse(localStorage.getItem("sales")) || [];
 function init() {
   let productSelect = document.getElementById("product");
 
-  for (let p in products) {
-    productSelect.innerHTML += `<option value="${p}">${p} - ₱${products[p]}</option>`;
-  }
+  productSelect.innerHTML += `<option value="NONE">NONE - ₱0</option>`;
 
+for (let p in products) {
+  productSelect.innerHTML += `<option value="${p}">${p} - ₱${products[p]}</option>`;
+}
   let addonDiv = document.getElementById("addons");
 
   for (let a in addons) {
@@ -338,6 +339,12 @@ addonDiv.innerHTML += `
 // ADD TO CART
 function addToCart() {
   let product = document.getElementById("product").value;
+
+let price = 0;
+
+if (product !== "NONE") {
+  price = products[product];
+}
   let qty = parseInt(document.getElementById("qty").value);
 
   let addonList = [];
@@ -357,7 +364,7 @@ for (let a in addons) {
   cart.push({
     product,
     qty,
-    price: products[product],
+    price: price,
     addons: addonList
   });
 
