@@ -192,6 +192,11 @@ Show All
 </div>
 
 <script>
+  function clearZero(el) {
+  if (el.value === "0") {
+    el.value = "";
+  }
+}
   function deleteSale(index) {
   if (!confirm("Delete this sale?")) return;
 
@@ -298,7 +303,11 @@ function init() {
     addonDiv.innerHTML += `
       <label>
         ${a} (₱${addons[a]})
-        <input type="number" id="addon_${a}" value="0" min="0">
+        <input type="number"
+       id="addon_${a}"
+       value="0"
+       min="0"
+       onfocus="clearZero(this)">
       </label>
     `;
   }
