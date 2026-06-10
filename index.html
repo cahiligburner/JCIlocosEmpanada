@@ -2,10 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Sales Tracker</title>
+<title>Sales Tracker POS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#000000">
+
 <style>
 body {
   font-family: Arial;
@@ -58,12 +60,56 @@ button:hover {
 
 .item {
   border-bottom: 1px solid #ddd;
-  padding: 5px 0;
+  padding: 8px 0;
+}
+
+.remove-btn {
+  background: red;
+  margin-top: 5px;
 }
 
 .total {
   font-size: 20px;
   font-weight: bold;
+}
+
+/* RECEIPT MODAL */
+#receiptModal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.7);
+}
+
+#receiptBox {
+  background: white;
+  width: 90%;
+  max-width: 400px;
+  margin: 50px auto;
+  padding: 15px;
+  border-radius: 10px;
+}
+button {
+  font-size: 16px;
+}
+
+select {
+  font-size: 16px;
+}
+
+input {
+  font-size: 18px;
+}
+
+.card {
+  padding: 18px;
+}
+
+button {
+  margin-top: 5px;
 }
 </style>
 </head>
@@ -71,7 +117,7 @@ button:hover {
 <body>
 
 <header>
-<h2>Sales Tracker</h2>
+<h2>Sales Tracker POS</h2>
 </header>
 
 <div class="container">
@@ -83,6 +129,10 @@ button:hover {
 <p id="totalTransactions">Transactions: 0</p>
 </div>
 
+<button onclick="exportCSV()" style="background:#0066cc;margin-top:10px;">
+Export Excel (CSV)
+</button>
+
 <!-- NEW ORDER -->
 <div class="card">
 <h3>New Sale</h3>
@@ -91,12 +141,17 @@ button:hover {
 <select id="product"></select>
 
 <label>Quantity</label>
-<input type="number" id="qty" value="1" min="1">
+<div style="display:flex;align-items:center;gap:10px;">
+  <button onclick="changeQty(-1)" style="width:60px;font-size:20px;">−</button>
+  <input type="text" id="qty" value="1" readonly style="text-align:center;font-size:18px;">
+  <button onclick="changeQty(1)" style="width:60px;font-size:20px;">+</button>
+</div>
 
 <h4>Add-ons</h4>
 <div class="addons" id="addons"></div>
 
 <button onclick="addToCart()">Add to Cart</button>
+<button onclick="clearInputs()" style="background:#555;margin-top:10px;">Clear Inputs</button>
 </div>
 
 <!-- CART -->
@@ -112,11 +167,88 @@ button:hover {
 <div class="card">
 <h3>Sales History</h3>
 <div id="history"></div>
+<label><b>Filter by Date</b></label>
+<input type="date" id="historyDate" onchange="renderHistory()">
+
+<button onclick="renderHistory()" style="background:#444;margin-top:10px;">
+Filter
+</button>
+
+<button onclick="resetHistoryFilter()" style="background:#777;margin-top:10px;">
+Show All
+</button>
+</div>
 </div>
 
+<!-- RECEIPT -->
+<div id="receiptModal">
+  <div id="receiptBox">
+    <h3>Receipt</h3>
+    <div id="receiptContent"></div>
+    <h3 id="receiptTotal"></h3>
+    <button onclick="window.print()">Print</button>
+    <button onclick="closeReceipt()" style="background:#555;">Close</button>
+  </div>
 </div>
 
 <script>
+function endShiftExport() {
+  let today = new Date().toDateString();
+
+  let todaySales = sales.filter(s =>
+    new Date(s.date).toDateString() === today
+  );
+
+  if (todaySales.length === 0) {
+    alert("No sales today to export.");
+    return;
+  }
+
+  let dataStr = JSON.stringify(todaySales, null, 2);
+  let blob = new Blob([dataStr], { type: "application/json" });
+  let url = URL.createObjectURL(blob);
+
+  let fileName = `end-shift-${new Date().toISOString().split("T")[0]}.json`;
+
+  let a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+function resetHistoryFilter() {
+  document.getElementById("historyDate").value = "";
+  renderHistory();
+}
+function changeQty(val) {
+  let qty = document.getElementById("qty");
+  let current = parseInt(qty.value);
+
+  current += val;
+
+  if (current < 1) current = 1;
+
+  qty.value = current;
+
+}
+function exportCSV() {
+  let csv = "Date,Total Items,Total Amount\n";
+
+  sales.forEach(s => {
+    csv += `"${s.date}",${s.items.length},${s.total}\n`;
+  });
+
+  let blob = new Blob([csv], { type: "text/csv" });
+  let url = URL.createObjectURL(blob);
+
+  let a = document.createElement("a");
+  a.href = url;
+  a.download = "sales-report.csv";
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
 // PRODUCTS
 const products = {
   "Regular": 70,
@@ -146,11 +278,13 @@ let sales = JSON.parse(localStorage.getItem("sales")) || [];
 // INIT
 function init() {
   let productSelect = document.getElementById("product");
+
   for (let p in products) {
     productSelect.innerHTML += `<option value="${p}">${p} - ₱${products[p]}</option>`;
   }
 
   let addonDiv = document.getElementById("addons");
+
   for (let a in addons) {
     addonDiv.innerHTML += `
       <label>
@@ -190,18 +324,38 @@ function addToCart() {
   });
 
   renderCart();
+
+  // ✅ AUTO RESET INPUTS AFTER ADDING
+  clearInputs();
+  // AUTO FOCUS BACK TO PRODUCT DROPDOWN
+  document.getElementById("product").focus();
+}
+// REMOVE SINGLE ITEM
+function removeItem(index) {
+  cart.splice(index, 1);
+  renderCart();
 }
 
+// CLEAR INPUTS
+function clearInputs() {
+  document.getElementById("qty").value = 1;
+
+  for (let a in addons) {
+    document.getElementById("addon_" + a).value = 0;
+  }
+}
 // RENDER CART
 function renderCart() {
   let cartDiv = document.getElementById("cart");
   cartDiv.innerHTML = "";
+
   let total = 0;
 
   cart.forEach((item, index) => {
     let itemTotal = item.qty * item.price;
 
     let addonText = "";
+
     item.addons.forEach(a => {
       itemTotal += a.qty * a.price;
       addonText += `<div>+ ${a.name} x${a.qty}</div>`;
@@ -214,6 +368,7 @@ function renderCart() {
         <b>${item.product} x${item.qty}</b><br>
         ${addonText}
         <b>₱${itemTotal}</b>
+        <button class="remove-btn" onclick="removeItem(${index})">Remove</button>
       </div>
     `;
   });
@@ -221,17 +376,24 @@ function renderCart() {
   document.getElementById("total").innerText = "Total: ₱" + total;
 }
 
-// COMPLETE SALE
+// COMPLETE SALE + RECEIPT
 function completeSale() {
   if (cart.length === 0) return alert("Cart is empty");
 
   let total = 0;
+  let receiptHTML = "";
 
   cart.forEach(item => {
     let itemTotal = item.qty * item.price;
+
+    receiptHTML += `<b>${item.product} x${item.qty}</b><br>`;
+
     item.addons.forEach(a => {
       itemTotal += a.qty * a.price;
+      receiptHTML += `+ ${a.name} x${a.qty}<br>`;
     });
+
+    receiptHTML += `<br>`;
     total += itemTotal;
   });
 
@@ -244,10 +406,20 @@ function completeSale() {
   sales.push(sale);
   localStorage.setItem("sales", JSON.stringify(sales));
 
+  // SHOW RECEIPT
+  document.getElementById("receiptContent").innerHTML = receiptHTML;
+  document.getElementById("receiptTotal").innerText = "TOTAL: ₱" + total;
+  document.getElementById("receiptModal").style.display = "block";
+
   cart = [];
   renderCart();
   renderHistory();
   updateDashboard();
+}
+
+// CLOSE RECEIPT
+function closeReceipt() {
+  document.getElementById("receiptModal").style.display = "none";
 }
 
 // HISTORY
@@ -255,7 +427,16 @@ function renderHistory() {
   let historyDiv = document.getElementById("history");
   historyDiv.innerHTML = "";
 
-  sales.slice().reverse().forEach(s => {
+  let selectedDate = document.getElementById("historyDate")?.value;
+
+  let filtered = sales.slice().reverse().filter(s => {
+    if (!selectedDate) return true;
+
+    let saleDate = new Date(s.date).toISOString().split("T")[0];
+    return saleDate === selectedDate;
+  });
+
+  filtered.forEach(s => {
     historyDiv.innerHTML += `
       <div class="item">
         ${s.date}<br>
@@ -268,27 +449,22 @@ function renderHistory() {
 // DASHBOARD
 function updateDashboard() {
   let today = new Date().toDateString();
-
-  let todaySales = 0;
+  let total = 0;
   let count = 0;
 
   sales.forEach(s => {
     if (new Date(s.date).toDateString() === today) {
-      todaySales += s.total;
+      total += s.total;
       count++;
     }
   });
 
-  document.getElementById("todaySales").innerText = "Today Sales: ₱" + todaySales;
+  document.getElementById("todaySales").innerText = "Today Sales: ₱" + total;
   document.getElementById("totalTransactions").innerText = "Transactions: " + count;
 }
 
 init();
 </script>
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js');
-}
-</script>
+
 </body>
 </html>
