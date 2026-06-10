@@ -192,6 +192,15 @@ Show All
 </div>
 
 <script>
+  function deleteSale(index) {
+  if (!confirm("Delete this sale?")) return;
+
+  sales.splice(index, 1);
+  localStorage.setItem("sales", JSON.stringify(sales));
+
+  renderHistory();
+  updateDashboard();
+}
 function endShiftExport() {
   let today = new Date().toDateString();
 
@@ -427,7 +436,9 @@ function renderHistory() {
 
   let selectedDate = document.getElementById("historyDate")?.value;
 
-  let filtered = sales.slice().reverse().filter(s => {
+  let filtered = sales.slice().reverse().map((s, index) => {
+    return { ...s, realIndex: sales.length - 1 - index };
+  }).filter(s => {
     if (!selectedDate) return true;
 
     let saleDate = new Date(s.date).toISOString().split("T")[0];
@@ -438,7 +449,10 @@ function renderHistory() {
     historyDiv.innerHTML += `
       <div class="item">
         ${s.date}<br>
-        <b>₱${s.total}</b>
+        <b>₱${s.total}</b><br>
+        <button onclick="deleteSale(${s.realIndex})" style="background:red;margin-top:5px;">
+          Delete
+        </button>
       </div>
     `;
   });
